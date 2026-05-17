@@ -5,6 +5,7 @@ const express = require('express');
 const cors = require('cors');
 const chatRouter = require('./chat');
 const notifyRouter = require('./notify');
+const { initDb } = require('./db');
 
 const app = express();
 app.use(cors());
@@ -18,6 +19,12 @@ app.get('/health', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`Get220v Chat API running on port ${PORT}`);
+
+initDb().then(() => {
+  app.listen(PORT, () => {
+    console.log(`Get220v Chat API running on port ${PORT}`);
+  });
+}).catch(err => {
+  console.error('DB init failed:', err.message);
+  process.exit(1);
 });

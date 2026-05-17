@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const admin = require('firebase-admin');
+const { saveToken, getAllTokens, deleteToken } = require('./db');
 
 let firebaseInitialized = false;
 
@@ -14,22 +15,20 @@ function initFirebase() {
   }
 }
 
-// Token registry - simpan FCM tokens
-const tokenRegistry = new Set();
-
-// Register token
-router.post('/register', (req, res) => {
-  const { token } = req.body;
-  if (token) {
-    tokenRegistry.add(token);
-    console.log('Token registered:', token.substring(0, 20) + '...');
-    res.json({ success: true, totalTokens: tokenRegistry.size });
-  } else {
-    res.status(400).json({ error: 'Token required' });
+// Register token ke PostgreSQL
+router.post('/register', async (req, res) => {
+  try {
+    const { token, userId, deviceInfo } = req.body;
+    if (!token) return res.status(400).json({ error: 'Token required' });
+    const result = await saveToken(token, userId, deviceInfo);
+    console.log('Token saved to DB:', token.substring(0, 20) + '...');
+    res.json({ success: true, data: result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 
-// Send to specific token
+// Send ke specific token
 router.post('/send', async (req, res) => {
   try {
     initFirebase();
@@ -39,7 +38,7 @@ router.post('/send', async (req, res) => {
     const message = {
       notification: { title: title || 'Get220v Alert', body: body || 'New alert' },
       data: data || {},
-      token: token
+      token
     };
 
     const response = await admin.messaging().send(message);
@@ -49,34 +48,45 @@ router.post('/send', async (req, res) => {
   }
 });
 
-// Webhook from ThingsBoard alarm
+// Webhook dari ThingsBoard alarm
 router.post('/alarm', async (req, res) => {
   try {
     initFirebase();
     const alarm = req.body;
-    console.log('Alarm received:', alarm.type || alarm.name, '| Device:', alarm.originatorName);
+    console.log("Full alarm data:", JSON.stringify(alarm, null, 2));
 
-    const title = `🚨 ${alarm.type || alarm.name || 'Alert'}`;
-    const body = `Device: ${alarm.originatorName || 'Unknown'} | Severity: ${alarm.severity || 'CRITICAL'}`;
+    const title = `🚨 ${alarm.type || alarm.name || "Alert"} - Get220v`;
+    const body = `📍 ${alarm.originatorName || "Unknown"} | ⚠️ ${alarm.severity || "CRITICAL"} | 🕐 ${new Date().toLocaleTimeString("id-ID")}`;
 
-    const tokens = Array.from(tokenRegistry);
-    
+    // Ambil semua token dari PostgreSQL
+    const tokens = await getAllTokens();
+
     if (tokens.length === 0) {
-      console.log('No registered tokens!');
+      console.log('No registered tokens in DB!');
       return res.json({ success: false, message: 'No tokens registered' });
     }
 
-    const results = await Promise.all(tokens.map(token =>
-      admin.messaging().send({
-        notification: { title, body },
-        data: {
-          alarmType: String(alarm.type || alarm.name || ''),
-          entityName: String(alarm.originatorName || ''),
-          severity: String(alarm.severity || '')
-        },
-        token
-      }).catch(err => ({ error: err.message, token }))
-    ));
+    const results = await Promise.all(tokens.map(async token => {
+      try {
+        const response = await admin.messaging().send({
+          notification: { title, body },
+          data: {
+            alarmType: String(alarm.type || alarm.name || ''),
+            entityName: String(alarm.originatorName || ''),
+            severity: String(alarm.severity || '')
+          },
+          token
+        });
+        return { success: true, messageId: response };
+      } catch (err) {
+        // Token invalid - hapus dari DB
+        if (err.code === 'messaging/registration-token-not-registered') {
+          await deleteToken(token);
+          console.log('Deleted invalid token from DB');
+        }
+        return { error: err.message };
+      }
+    }));
 
     console.log('FCM sent to', tokens.length, 'devices');
     res.json({ success: true, results });
