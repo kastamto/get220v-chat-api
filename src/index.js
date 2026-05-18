@@ -5,6 +5,7 @@ const express = require('express');
 const cors = require('cors');
 const chatRouter = require('./chat');
 const notifyRouter = require('./notify');
+const telegramRouter = require('./telegram');
 const { initDb } = require('./db');
 
 const app = express();
@@ -13,6 +14,7 @@ app.use(express.json());
 
 app.use('/api/chat', chatRouter);
 app.use('/api/notify', notifyRouter);
+app.use('/api/telegram', telegramRouter);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'Get220v Chat API running' });
