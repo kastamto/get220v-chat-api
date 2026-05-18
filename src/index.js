@@ -6,7 +6,9 @@ const cors = require('cors');
 const axios = require('axios');
 const chatRouter = require('./chat');
 const notifyRouter = require('./notify');
-const telegramRouter = require('./telegram');
+const telegramModule = require('./telegram');
+const telegramRouter = telegramModule;
+const qrRouter = require('./qr');
 const { initDb } = require('./db');
 
 const app = express();
@@ -16,6 +18,7 @@ app.use(express.json());
 app.use('/api/chat', chatRouter);
 app.use('/api/notify', notifyRouter);
 app.use('/api/telegram', telegramRouter);
+app.use('/api/qr', qrRouter);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'Get220v Chat API running' });
@@ -34,6 +37,7 @@ app.post('/api/proxy/tb', async (req, res) => {
 const PORT = process.env.PORT || 3001;
 
 initDb().then(() => {
+  telegramModule.startPolling && telegramModule.startPolling();
   app.listen(PORT, () => {
     console.log(`Get220v Chat API running on port ${PORT}`);
   });
