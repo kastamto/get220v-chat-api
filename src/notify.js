@@ -4,6 +4,55 @@ const admin = require('firebase-admin');
 const { saveToken, getAllTokens, deleteToken } = require('./db');
 
 let firebaseInitialized = false;
+const fetch = require('node-fetch');
+
+async function sendTbNotification(alarm) {
+  try {
+    // Login ke TB
+    const loginRes = await fetch('http://localhost:8080/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: process.env.TB_USER || 'tenant@thingsboard.org',
+        password: process.env.TB_PASS || 'tenant'
+      })
+    });
+    const { token } = await loginRes.json();
+
+    // Kirim notifikasi via TB API
+    await fetch('http://localhost:8080/api/notification', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        targets: [{ type: 'PLATFORM_USERS', usersFilter: { type: 'ALL_USERS' } }],
+        template: {
+          name: alarm.type || 'Alert',
+          notificationType: 'ALARM',
+          configuration: {
+            deliveryMethodsTemplates: {
+              MOBILE_APP: {
+                enabled: true,
+                subject: `🚨 ${alarm.type || alarm.name}`,
+                body: `Device: ${alarm.originatorName} | Severity: ${alarm.severity}`,
+                additionalConfig: {
+                  icon: { enabled: false },
+                  onClick: { enabled: false }
+                }
+              }
+            }
+          }
+        }
+      })
+    });
+    console.log('TB notification sent');
+  } catch (err) {
+    console.error('TB notification error:', err.message);
+  }
+}
+
 
 function initFirebase() {
   if (!firebaseInitialized) {
@@ -89,6 +138,7 @@ router.post('/alarm', async (req, res) => {
     }));
 
     console.log('FCM sent to', tokens.length, 'devices');
+    await sendTbNotification(alarm);
     res.json({ success: true, results });
   } catch (err) {
     console.error('Alarm FCM error:', err.message);
