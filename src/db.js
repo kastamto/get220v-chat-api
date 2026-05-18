@@ -22,6 +22,7 @@ async function initDb() {
       )
     `);
     console.log('✅ FCM tokens table ready');
+    await initGroupTables(client);
   } finally {
     client.release();
   }
@@ -47,4 +48,31 @@ async function deleteToken(token) {
   await pool.query('DELETE FROM fcm_tokens WHERE token = $1', [token]);
 }
 
-module.exports = { initDb, saveToken, getAllTokens, deleteToken };
+
+async function initGroupTables(client) {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS device_groups (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      tenant_id TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      color TEXT DEFAULT '#6F42C1',
+      icon TEXT DEFAULT 'folder',
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS device_group_members (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      group_id UUID REFERENCES device_groups(id) ON DELETE CASCADE,
+      device_id TEXT NOT NULL,
+      device_name TEXT,
+      added_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(group_id, device_id)
+    )
+  `);
+  console.log('✅ Device group tables ready');
+}
+
+module.exports = { pool, initDb, saveToken, getAllTokens, deleteToken };

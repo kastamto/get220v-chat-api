@@ -9,6 +9,7 @@ const notifyRouter = require('./notify');
 const telegramModule = require('./telegram');
 const telegramRouter = telegramModule;
 const qrRouter = require('./qr');
+const groupsRouter = require('./groups');
 const { initDb } = require('./db');
 
 const app = express();
@@ -19,6 +20,7 @@ app.use('/api/chat', chatRouter);
 app.use('/api/notify', notifyRouter);
 app.use('/api/telegram', telegramRouter);
 app.use('/api/qr', qrRouter);
+app.use('/api/groups', groupsRouter);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'Get220v Chat API running' });

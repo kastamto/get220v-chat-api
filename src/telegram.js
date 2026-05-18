@@ -380,6 +380,52 @@ async function handleTelegramUpdate(update) {
       });
       return;
 
+
+    } else if (command === '/groupstatus') {
+      if (!arg) {
+        reply = '❌ Format: /groupstatus [nama group]\nContoh: /groupstatus Gedung A';
+      } else {
+        // Cari group berdasarkan nama
+        const groupRes = await require('axios').get('http://localhost:3001/api/groups', {
+          headers: {'x-tenant-id': 'default'}
+        });
+        const groups = groupRes.data;
+        const group = groups.find(g => g.name.toLowerCase().includes(arg.toLowerCase()));
+        
+        if (!group) {
+          reply = '❌ Group tidak ditemukan: ' + arg + '\n\nGroup tersedia:\n';
+          groups.forEach(g => { reply += '• ' + g.name + '\n'; });
+        } else {
+          // Ambil devices di group
+          const devRes = await require('axios').get('http://localhost:3001/api/groups/' + group.id + '/devices');
+          const members = devRes.data;
+          
+          if (!members.length) {
+            reply = '📂 *' + group.name + '*\n\n_Belum ada device dalam group ini_';
+          } else {
+            reply = '📂 *' + group.name + '* (' + members.length + ' devices)\n\n';
+            const token = await getTbCommandToken();
+            
+            for (const member of members) {
+              try {
+                const telRes = await require('axios').get(
+                  TB_URL_CMD + '/api/plugins/telemetry/DEVICE/' + member.device_id + '/values/timeseries',
+                  { headers: { 'X-Authorization': 'Bearer ' + token } }
+                );
+                const tel = telRes.data;
+                reply += '📱 *' + member.device_name + '*\n';
+                Object.entries(tel).slice(0,3).forEach(([k,v]) => {
+                  if (v[0]) reply += '  • ' + k + ': ' + v[0].value + '\n';
+                });
+                reply += '\n';
+              } catch(e) {
+                reply += '📱 *' + member.device_name + '*\n  • _No data_\n\n';
+              }
+            }
+          }
+        }
+      }
+
     } else {
       reply = '❓ Command tidak dikenal. Ketik /help';
     }
