@@ -3,6 +3,7 @@ dotenv.config();
 
 const express = require('express');
 const cors = require('cors');
+const axios = require('axios');
 const chatRouter = require('./chat');
 const notifyRouter = require('./notify');
 const telegramRouter = require('./telegram');
@@ -18,6 +19,16 @@ app.use('/api/telegram', telegramRouter);
 
 app.get('/health', (req, res) => {
   res.json({ status: 'Get220v Chat API running' });
+});
+
+app.post('/api/proxy/tb', async (req, res) => {
+  try {
+    const { url, method, headers, data } = req.body;
+    const response = await axios({ url, method: method||'GET', headers: headers||{}, data });
+    res.json(response.data);
+  } catch (err) {
+    res.status(err.response?.status||500).json(err.response?.data||{error: err.message});
+  }
 });
 
 const PORT = process.env.PORT || 3001;
