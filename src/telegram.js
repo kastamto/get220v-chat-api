@@ -106,13 +106,33 @@ const BOT_TOKEN_VAL = process.env.TELEGRAM_BOT_TOKEN;
 let tbCommandToken = null;
 
 async function getTbCommandToken() {
-  if (tbCommandToken) return tbCommandToken;
+  if (tbCommandToken && Date.now() < tbTokenExpiry) return tbCommandToken;
   const res = await axios.post(TB_URL + '/api/auth/login', {
-    username: process.env.TB_USER || 'tenant@thingsboard.org',
-    password: process.env.TB_PASS || 'tenant'
+    username: process.env.TB_USER || 'admin@get220v.id',
+    password: process.env.TB_PASS || 'D7sc657qnqpUG6w'
   });
   tbCommandToken = res.data.token;
+  tbTokenExpiry = Date.now() + 9000000; // 2.5 hours
   return tbCommandToken;
+}
+
+let tbTokenExpiry = 0;
+
+async function tbFetch(cfg) {
+  try {
+    const token = await getTbCommandToken();
+    cfg.headers = Object.assign(cfg.headers || {}, { 'X-Authorization': 'Bearer ' + token });
+    return await require('axios')(cfg);
+  } catch(err) {
+    if (err.response && err.response.status === 401) {
+      tbCommandToken = null;
+      tbTokenExpiry = 0;
+      const token2 = await getTbCommandToken();
+      cfg.headers['X-Authorization'] = 'Bearer ' + token2;
+      return await require('axios')(cfg);
+    }
+    throw err;
+  }
 }
 
 // Handle incoming Telegram message (webhook)
